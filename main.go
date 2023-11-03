@@ -25,10 +25,18 @@ func main() {
 
 	defer db.Close()
 
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// create router
 
 	router := mux.NewRouter()
 	router.HandleFunc("/users", getUsers(db)).Methods("GET")
+	router.HandleFunc("/user/{id}", getUser(db)).Methods("GET")
+	router.HandleFunc("/users", createUser(db)).Methods("POST")
 
 	// create server
 
@@ -44,28 +52,54 @@ func jsonContentTypeMiddleware(next http.Handler) http.Handler {
 
 func getUsers(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := db.Query("Select * from users")
-
+		rows, err := db.Query("SELECT * FROM users")
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		defer rows.Close()
 
-		var users []User
-
+		users := []User{}
 		for rows.Next() {
 			var u User
-
 			if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
 				log.Fatal(err)
 			}
 			users = append(users, u)
 		}
-
 		if err := rows.Err(); err != nil {
 			log.Fatal(err)
 		}
+
 		json.NewEncoder(w).Encode(users)
+	}
+}
+
+func getUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		var u User
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		json.NewEncoder(w).Encode(u)
+	}
+}
+
+func createUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var u User
+		json.NewDecoder(r.Body).Decode(&u)
+
+		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id", u.Name, u.Email).Scan(&u.ID)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		json.NewEncoder(w).Encode(u)
 	}
 }
