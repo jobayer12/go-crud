@@ -28,6 +28,16 @@ func CreateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": user})
 }
 
+func GetByUserId(c *gin.Context) {
+	var user models.User
+	id := c.Param("id")
+	if err := models.DB.Where("id = ?", id).First(&user).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user id!"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": user})
+}
+
 func UpdateUserById(c *gin.Context) {
 	var user models.User
 	id := c.Param("id")
